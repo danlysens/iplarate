@@ -7,95 +7,101 @@
   <style>
     * {
       box-sizing: border-box;
+      user-select: none;
     }
 
     body {
       margin: 0;
       padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-family: 'Segoe UI', system-ui, sans-serif;
       text-align: center;
-      background: linear-gradient(135deg, #6dd5ed, #2193b0);
+      background: linear-gradient(135deg, #4facfe, #00f2fe);
       color: #2c3e50;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 15px;
     }
 
     h1 {
-      font-size: 2.4rem;
-      margin-bottom: 10px;
-      color: #fff;
-      text-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      font-size: 2.2rem;
+      margin-bottom: 12px;
+      color: white;
+      text-shadow: 0 2px 5px rgba(0,0,0,0.3);
     }
 
     #game-info {
-      font-size: 1.2rem;
-      font-weight: 600;
-      background: rgba(255, 255, 255, 0.85);
-      padding: 10px 20px;
-      border-radius: 30px;
+      font-size: 1.25rem;
+      font-weight: 700;
+      padding: 12px 24px;
+      border-radius: 40px;
       margin: 15px 0;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-      transition: all 0.3s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+      transition: background 0.3s ease;
     }
+
+    .player-1-turn { background: rgba(255, 255, 255, 0.92); color: #e74c3c; }
+    .player-2-turn { background: rgba(255, 255, 255, 0.92); color: #3498db; }
 
     #board {
       display: inline-grid;
-      grid-template-columns: repeat(10, 45px);
+      grid-template-columns: repeat(10, 48px);
       gap: 3px;
       margin: 20px auto;
-      background: rgba(255,255,255,0.2);
-      padding: 10px;
-      border-radius: 12px;
-      backdrop-filter: blur(6px);
-      box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+      background: rgba(255,255,255,0.15);
+      padding: 12px;
+      border-radius: 16px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.25);
     }
 
     .cell {
-      width: 45px;
-      height: 45px;
-      background: #e0f7fa;
-      border-radius: 8px;
+      width: 48px;
+      height: 48px;
+      background: rgba(255, 255, 255, 0.7);
+      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: bold;
+      font-size: 18px;
       cursor: pointer;
-      transition: all 0.25s ease;
+      transition: all 0.2s ease;
       position: relative;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
 
     .cell:hover {
-      transform: scale(1.05);
-      background: #b2ebf2;
+      transform: scale(1.06);
+      background: rgba(255, 255, 255, 0.9);
     }
 
     .start {
-      background: linear-gradient(135deg, #4caf50, #8bc34a);
+      background: linear-gradient(135deg, #2ecc71, #27ae60);
       color: white;
     }
 
     .treasure {
-      background: linear-gradient(135deg, #ffd700, #ffaa00);
-      color: #333;
+      background: linear-gradient(135deg, #f1c40f, #f39c12);
+      color: #2c3e50;
     }
 
     .player {
-      background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+      background: linear-gradient(135deg, #e74c3c, #c0392b);
       color: white;
     }
 
     .trap-revealed {
       animation: flashTrap 0.6s ease;
+      color: white !important;
+      font-size: 16px;
     }
 
     @keyframes flashTrap {
-      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,70,70,0.6); }
-      50% { transform: scale(1.1); box-shadow: 0 0 0 14px rgba(255,70,70,0); }
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+      50% { transform: scale(1.15); box-shadow: 0 0 0 16px rgba(231, 76, 60, 0); }
     }
 
     #controls {
@@ -103,36 +109,38 @@
     }
 
     button {
-      padding: 10px 20px;
-      font-size: 1rem;
-      margin: 0 8px;
+      padding: 11px 22px;
+      font-size: 1.05rem;
+      margin: 0 10px;
       border: none;
-      border-radius: 30px;
-      background: #fff;
+      border-radius: 50px;
+      background: white;
       color: #2c3e50;
       font-weight: 600;
       cursor: pointer;
-      box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
       transition: all 0.2s ease;
     }
 
     button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 12px rgba(0,0,0,0.2);
+      transform: translateY(-3px);
+      box-shadow: 0 6px 14px rgba(0,0,0,0.25);
+    }
+
+    button:active {
+      transform: translateY(0);
     }
 
     .win {
-      animation: celebrate 1.2s ease infinite;
+      animation: celebrate 0.8s ease infinite;
     }
 
     @keyframes celebrate {
       0%, 100% { transform: rotate(0deg); }
-      25% { transform: rotate(5deg); }
-      75% { transform: rotate(-5deg); }
-    }
-
-    .hidden {
-      opacity: 0;
+      20% { transform: rotate(6deg); }
+      40% { transform: rotate(-4deg); }
+      60% { transform: rotate(3deg); }
+      80% { transform: rotate(-2deg); }
     }
   </style>
 </head>
@@ -146,56 +154,66 @@
   </div>
 
   <script>
-    // === ЗВУКИ ===
+    // === ЗВУКИ (Web Audio API) ===
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    function playTone(frequency, duration = 0.1, type = 'sine', gain = 0.2) {
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-      oscillator.type = type;
-      oscillator.frequency.value = frequency;
-      gainNode.gain.value = gain;
-      gainNode.connect(audioCtx.destination);
-      oscillator.connect(gainNode);
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + duration);
-    }
+    const sounds = {
+      place: () => {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sine';
+        o.frequency.value = 520;
+        g.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+        o.connect(g).connect(audioCtx.destination);
+        o.start();
+        o.stop(audioCtx.currentTime + 0.2);
+      },
+      step: () => {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'square';
+        o.frequency.value = 320;
+        g.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+        o.connect(g).connect(audioCtx.destination);
+        o.start();
+        o.stop(audioCtx.currentTime + 0.15);
+      },
+      trap: () => {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sawtooth';
+        o.frequency.value = 150;
+        g.gain.setValueAtTime(0.25, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+        o.connect(g).connect(audioCtx.destination);
+        o.start();
+        o.stop(audioCtx.currentTime + 0.4);
+      },
+      win: () => {
+        const t = audioCtx.currentTime;
+        [523, 659, 784, 1046].forEach((f, i) => {
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.frequency.value = f;
+          g.gain.setValueAtTime(0.15, t + i * 0.2);
+          g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.2 + 0.3);
+          o.connect(g).connect(audioCtx.destination);
+          o.start(t + i * 0.2);
+          o.stop(t + i * 0.2 + 0.3);
+        });
+      }
+    };
 
-    function playTrapSound() {
-      playTone(120, 0.3, 'sawtooth', 0.3);
-    }
-
-    function playPlaceSound() {
-      playTone(400, 0.1, 'sine', 0.15);
-    }
-
-    function playStepSound() {
-      playTone(300, 0.08, 'square', 0.1);
-    }
-
-    function playWinSound() {
-      const now = audioCtx.currentTime;
-      [523, 659, 784, 1046].forEach((freq, i) => {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.15, now + i * 0.15);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.15 + 0.3);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start(now + i * 0.15);
-        osc.stop(now + i * 0.15 + 0.3);
-      });
-    }
-
-    // === ИГРОВАЯ ЛОГИКА ===
+    // === ИГРОВОЕ СОСТОЯНИЕ ===
     const size = 10;
     let currentPlayer = 1;
-    let phase = 'placeTraps';
-    let traps = new Map(); // key: "r,c" → playerId
+    let phase = 'placeTraps'; // 'placeTraps' или 'playGame'
+    let traps = new Map(); // "r,c" => playerId
     let playerPos = { 1: [9, 0], 2: [9, 0] };
     let trapsPlaced = { 1: 0, 2: 0 };
-    let maxTraps = 3;
+    const maxTraps = 3;
 
     const board = document.getElementById('board');
     const info = document.getElementById('game-info');
@@ -207,7 +225,7 @@
       for (let r = 0; r < size; r++) {
         for (let c = 0; c < size; c++) {
           const cell = document.createElement('div');
-          cell.classList.add('cell');
+          cell.className = 'cell';
           cell.dataset.row = r;
           cell.dataset.col = c;
           if (r === 9 && c === 0) cell.classList.add('start');
@@ -217,63 +235,75 @@
       }
     }
 
+    function updateInfo() {
+      info.className = '';
+      if (phase === 'placeTraps') {
+        info.textContent = `Выбор ловушек: Игрок ${currentPlayer}`;
+        info.classList.add(currentPlayer === 1 ? 'player-1-turn' : 'player-2-turn');
+      } else if (phase === 'playGame') {
+        info.textContent = `Ход игрока ${currentPlayer}`;
+        info.classList.add(currentPlayer === 1 ? 'player-1-turn' : 'player-2-turn');
+      } else {
+        info.textContent = 'Игра окончена!';
+        info.style.background = 'rgba(255,255,255,0.9)';
+        info.style.color = '#27ae60';
+      }
+    }
+
     function render() {
+      // Очистка
       document.querySelectorAll('.cell').forEach(cell => {
         cell.classList.remove('player', 'trap-revealed');
         cell.textContent = '';
       });
 
+      // Иконки
       document.querySelector('.start').textContent = '🏠';
       document.querySelector('.treasure').textContent = '🏆';
 
-      // Показ ловушек ТОЛЬКО своих и ТОЛЬКО в фазе расстановки
+      // Ловушки: только свои и только в фазе расстановки
       if (phase === 'placeTraps') {
         traps.forEach((owner, key) => {
           if (owner === currentPlayer) {
             const [r, c] = key.split(',').map(Number);
-            const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
-            if (cell) {
-              cell.textContent = '⚠️';
-            }
+            const el = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+            if (el) el.textContent = '⚠️';
           }
         });
       }
 
       // Позиции игроков
-      Object.entries(playerPos).forEach(([id, [r, c]]) => {
-        const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
-        if (cell) {
-          cell.classList.add('player');
-          cell.textContent = `P${id}`;
+      for (const [id, [r, c]] of Object.entries(playerPos)) {
+        const el = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+        if (el) {
+          el.classList.add('player');
+          el.textContent = `P${id}`;
         }
-      });
-
-      // Обновление статуса
-      if (phase === 'placeTraps') {
-        info.textContent = `Выбор ловушек: Игрок ${currentPlayer}`;
-      } else if (phase === 'playGame') {
-        info.textContent = `Ход игрока ${currentPlayer}`;
-      } else if (phase === 'ended') {
-        info.textContent = 'Игра окончена!';
       }
+
+      updateInfo();
+
+      // Скрыть кнопку "Далее" после начала игры
+      nextBtn.style.display = phase === 'playGame' ? 'none' : 'inline-block';
     }
 
     function placeTrap(row, col) {
       if (phase !== 'placeTraps') return;
-      if ((row === 9 && col === 0) || (row === 0 && col === 9)) return;
+      if ((row === 9 && col === 0) || (row === 0 && col === 9)) return; // нельзя в старт/сокровище
       const key = `${row},${col}`;
-      if (traps.has(key)) return;
+      if (traps.has(key)) return; // уже занято
 
       traps.set(key, currentPlayer);
       trapsPlaced[currentPlayer]++;
 
-      playPlaceSound();
+      sounds.place();
 
       if (trapsPlaced[currentPlayer] >= maxTraps) {
         currentPlayer = currentPlayer === 1 ? 2 : 1;
         if (trapsPlaced[currentPlayer] >= maxTraps) {
-          currentPlayer = 1;
+          // Оба поставили — начинаем игру
           phase = 'playGame';
+          currentPlayer = 1;
         }
       }
       render();
@@ -281,59 +311,64 @@
 
     function movePlayer(dr, dc) {
       if (phase !== 'playGame') return;
-      const [r, c] = playerPos[currentPlayer];
-      let nr = r + dr;
-      let nc = c + dc;
 
+      const [r, c] = playerPos[currentPlayer];
+      const nr = r + dr;
+      const nc = c + dc;
+
+      // Проверка границ и шага
       if (nr < 0 || nr >= size || nc < 0 || nc >= size) return;
+      if (Math.abs(dr) + Math.abs(dc) !== 1) return; // только соседние
 
       playerPos[currentPlayer] = [nr, nc];
-      playStepSound();
+      sounds.step();
 
       const key = `${nr},${nc}`;
       if (traps.has(key)) {
-        const trapOwner = traps.get(key);
-        // Игрок НЕ попадает в свою ловушку!
-        if (trapOwner === currentPlayer) {
-          // Просто стоит на своей — ничего не происходит
-          render();
+        const owner = traps.get(key);
+        if (owner !== currentPlayer) {
+          // Попал в ловушку СОПЕРНИКА
+          const cell = document.querySelector(`.cell[data-row="${nr}"][data-col="${nc}"]`);
+          cell.classList.add('trap-revealed');
+          cell.textContent = `T${owner}`;
+          sounds.trap();
+
+          setTimeout(() => {
+            cell.classList.remove('trap-revealed');
+            cell.textContent = '';
+            playerPos[currentPlayer] = [9, 0]; // возврат на старт
+            alert(`Игрок ${currentPlayer} попал в ловушку Игрока ${owner}! Возврат на старт.`);
+            // Передача хода
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            render();
+          }, 600);
           return;
         }
-
-        // Попал в ловушку СОПЕРНИКА
-        const trapCell = document.querySelector(`.cell[data-row="${nr}"][data-col="${nc}"]`);
-        trapCell.classList.add('trap-revealed');
-        trapCell.textContent = `T${trapOwner}`;
-        playTrapSound();
-
-        setTimeout(() => {
-          trapCell.classList.remove('trap-revealed');
-          trapCell.textContent = '';
-          playerPos[currentPlayer] = [9, 0];
-          alert(`Игрок ${currentPlayer} попал в ловушку Игрока ${trapOwner}! Возврат на старт.`);
-          render();
-        }, 600);
-        return;
+        // Если своя — просто стоим, ход завершён
       }
 
-      // Победа?
+      // Проверка победы
       if (nr === 0 && nc === 9) {
         const winCell = document.querySelector('.treasure');
         winCell.classList.add('win');
-        playWinSound();
+        sounds.win();
         setTimeout(() => {
-          alert(`Игрок ${currentPlayer} нашёл сокровище! Победа! 🎉`);
+          alert(`🎉 Игрок ${currentPlayer} нашёл сокровище и победил!`);
         }, 300);
         phase = 'ended';
+        render();
         return;
       }
 
+      // Передача хода
       currentPlayer = currentPlayer === 1 ? 2 : 1;
       render();
     }
 
+    // === ОБРАБОТЧИКИ ===
     board.addEventListener('click', (e) => {
       if (!e.target.classList.contains('cell')) return;
+
       const r = parseInt(e.target.dataset.row);
       const c = parseInt(e.target.dataset.col);
 
@@ -341,11 +376,7 @@
         placeTrap(r, c);
       } else if (phase === 'playGame') {
         const [pr, pc] = playerPos[currentPlayer];
-        const dr = r - pr;
-        const dc = c - pc;
-        if (Math.abs(dr) + Math.abs(dc) === 1) {
-          movePlayer(dr, dc);
-        }
+        movePlayer(r - pr, c - pc);
       }
     });
 
@@ -361,7 +392,7 @@
       location.reload();
     });
 
-    // Инициализация
+    // === СТАРТ ===
     initBoard();
     render();
   </script>
