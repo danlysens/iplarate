@@ -4,12 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Остров сокровищ и ловушки — Мультиплеер</title>
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
   <style>
     * { box-sizing: border-box; user-select: none; }
     body {
       margin: 0; padding: 0;
       font-family: 'Segoe UI', system-ui, sans-serif;
-      background: linear-gradient(135deg, #4facfe, #00f2fe);
+      background: linear-gradient(135deg, #6a11cb, #2575fc);
       color: #2c3e50;
       min-height: 100vh;
       display: flex;
@@ -18,17 +20,18 @@
       justify-content: center;
       padding: 20px;
     }
-    .screen { display: none; width: 100%; max-width: 600px; }
+    .screen { display: none; width: 100%; max-width: 650px; }
     .active { display: block !important; }
     h1 {
       font-size: 2.2rem; color: white;
       text-shadow: 0 2px 5px rgba(0,0,0,0.3);
       margin-bottom: 20px;
+      text-align: center;
     }
     .btn {
       padding: 12px 24px;
       font-size: 1.1rem;
-      margin: 10px;
+      margin: 10px 5px;
       border: none;
       border-radius: 50px;
       background: white;
@@ -37,20 +40,28 @@
       cursor: pointer;
       box-shadow: 0 4px 10px rgba(0,0,0,0.2);
       transition: all 0.2s;
+      min-width: 220px;
     }
     .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,0.25); }
     .btn:active { transform: translateY(0); }
+    .btn.green { background: #2ecc71; color: white; }
+    .btn.blue { background: #3498db; color: white; }
+    .btn.red { background: #e74c3c; color: white; }
     .input-group {
       margin: 20px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
     input {
       padding: 12px;
       font-size: 1.1rem;
-      width: 200px;
+      width: 220px;
       border: none;
       border-radius: 50px;
       text-align: center;
-      margin: 0 10px;
+      margin: 10px 0;
+      font-weight: bold;
     }
     #lobby-info {
       background: rgba(255,255,255,0.85);
@@ -59,14 +70,16 @@
       margin: 20px 0;
       font-weight: 600;
       box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      text-align: center;
     }
     #game-info {
-      font-size: 1.2rem;
+      font-size: 1.25rem;
       font-weight: 700;
       padding: 12px 24px;
       border-radius: 40px;
       margin: 15px 0;
       box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+      min-height: 30px;
     }
     .player-1-turn { background: rgba(255,255,255,0.92); color: #e74c3c; }
     .player-2-turn { background: rgba(255,255,255,0.92); color: #3498db; }
@@ -89,6 +102,7 @@
       font-weight: bold; font-size: 16px;
       cursor: pointer;
       transition: all 0.2s;
+      position: relative;
     }
     .cell:hover { transform: scale(1.05); background: rgba(255,255,255,0.9); }
     .start { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; }
@@ -108,72 +122,163 @@
       25%,75% { transform: rotate(4deg); }
       50% { transform: rotate(-4deg); }
     }
-    .status { margin-top: 10px; font-style: italic; color: white; }
+    .status { 
+      margin: 15px 0; 
+      padding: 10px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.2);
+      color: white;
+      font-size: 0.95rem;
+      text-align: center;
+    }
+    .connection-status {
+      padding: 8px 16px;
+      border-radius: 20px;
+      margin: 10px 0;
+      font-weight: bold;
+      display: inline-block;
+    }
+    .connected { background: #2ecc71; color: white; }
+    .connecting { background: #f39c12; color: white; }
+    .disconnected { background: #e74c3c; color: white; }
+    #qr-container {
+      margin: 20px 0;
+      display: flex;
+      justify-content: center;
+    }
+    #qr-code {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+    .players-list {
+      margin: 15px 0;
+      padding: 10px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 10px;
+    }
+    .hidden { display: none; }
+    .instructions {
+      background: rgba(255,255,255,0.2);
+      padding: 15px;
+      border-radius: 10px;
+      margin: 15px 0;
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
   <!-- Главное меню -->
   <div id="menu-screen" class="screen active">
     <h1>🏝️ Остров сокровищ</h1>
-    <button id="btn-create" class="btn">Создать лобби</button>
+    <button id="btn-local" class="btn green">🎮 Играть на одном устройстве</button>
+    <button id="btn-create" class="btn blue">➕ Создать онлайн-игру</button>
     <div class="input-group">
-      <input type="text" id="room-code" placeholder="Код лобби" maxlength="6" />
-      <button id="btn-join" class="btn">Присоединиться</button>
+      <input type="text" id="room-code" placeholder="Код комнаты" maxlength="8" />
+      <button id="btn-join" class="btn blue">🔗 Присоединиться</button>
     </div>
-    <div class="status">Подключение через SocketsBay (публичный сервер)</div>
+    <div class="instructions">
+      <strong>Как играть онлайн:</strong><br>
+      1. Хост создает игру и получает код<br>
+      2. Гость вводит код хоста<br>
+      3. Хост подтверждает подключение<br>
+      4. Игра начинается автоматически!
+    </div>
+    <div class="status">
+      Для онлайн-игры нужен интернет.<br>
+      Все данные передаются напрямую между браузерами.
+    </div>
   </div>
 
-  <!-- Лобби -->
-  <div id="lobby-screen" class="screen">
-    <h1>🏘️ Лобби</h1>
-    <div id="lobby-info">Ожидание игроков...</div>
-    <button id="btn-start" class="btn" disabled>Начать игру</button>
-    <button id="btn-lobby-back" class="btn">Назад</button>
+  <!-- Ожидание подключения (хост) -->
+  <div id="host-screen" class="screen">
+    <h1>🏠 Вы — ХОЗЯИН</h1>
+    <div class="status">Ожидание второго игрока...</div>
+    <div id="qr-container">
+      <div id="qr-code"></div>
+    </div>
+    <div class="connection-status connecting" id="host-status">
+      Код комнаты: <span id="host-code">XXXXXX</span>
+    </div>
+    <div class="players-list">
+      <div>Игрок 1 (Вы): ✅ Онлайн</div>
+      <div>Игрок 2: ⏳ Ожидание...</div>
+    </div>
+    <button id="btn-cancel-host" class="btn red">Отменить</button>
+  </div>
+
+  <!-- Подключение к хосту (гость) -->
+  <div id="guest-screen" class="screen">
+    <h1>🔗 Подключение к хосту</h1>
+    <div class="status">Пытаемся подключиться к комнате...</div>
+    <input type="text" id="guest-code" placeholder="Код комнаты" maxlength="8" value="" readonly />
+    <div class="connection-status connecting" id="guest-status">
+      Статус: Подключение...
+    </div>
+    <button id="btn-cancel-guest" class="btn red">Отменить</button>
   </div>
 
   <!-- Игра -->
   <div id="game-screen" class="screen">
     <h1>🗺️ Игра</h1>
-    <div id="game-info">Подключение...</div>
+    <div id="game-info">Загрузка...</div>
     <div id="board"></div>
-    <button id="btn-game-back" class="btn">Выйти</button>
+    <div class="players-status">
+      <div>Игрок 1: <span id="player1-status">🟢 Онлайн</span></div>
+      <div>Игрок 2: <span id="player2-status">🟢 Онлайн</span></div>
+    </div>
+    <button id="btn-game-back" class="btn red">Выйти из игры</button>
   </div>
 
   <script>
+    // =============================
     // === ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ===
-    let ws = null;
+    // =============================
+    let peer = null;
+    let currentPeerId = null;
+    let conn = null;
     let roomId = null;
-    let playerId = null; // 'host' или 'guest'
     let isHost = false;
+    let isLocalMode = false;
+    let playerRole = null; // 'player1' или 'player2'
 
-    const screens = {
-      menu: document.getElementById('menu-screen'),
-      lobby: document.getElementById('lobby-screen'),
-      game: document.getElementById('game-screen')
-    };
-
-    function showScreen(name) {
-      Object.values(screens).forEach(s => s.classList.remove('active'));
-      screens[name].classList.add('active');
-    }
-
-    // === ГЕНЕРАЦИЯ КОДА ЛОББИ ===
-    function generateRoomId() {
-      return Math.random().toString(36).substring(2, 8).toUpperCase();
-    }
-
-    // === ИНИЦИАЛИЗАЦИЯ ИГРЫ ===
+    // Игровое состояние
     const size = 10;
-    let currentPlayerTurn = 1; // 1 или 2
+    let currentPlayer = 1;
     let phase = 'placeTraps';
     let traps = new Map();
     let playerPos = { 1: [9, 0], 2: [9, 0] };
     let trapsPlaced = { 1: 0, 2: 0 };
     const maxTraps = 3;
 
+    // DOM элементы
+    const screens = {
+      menu: document.getElementById('menu-screen'),
+      host: document.getElementById('host-screen'),
+      guest: document.getElementById('guest-screen'),
+      game: document.getElementById('game-screen')
+    };
     const boardEl = document.getElementById('board');
     const gameInfo = document.getElementById('game-info');
+    const hostCodeEl = document.getElementById('host-code');
+    const qrCodeEl = document.getElementById('qr-code');
+    const guestCodeEl = document.getElementById('guest-code');
+    const hostStatusEl = document.getElementById('host-status');
+    const guestStatusEl = document.getElementById('guest-status');
 
+    // =============================
+    // === ФУНКЦИИ ПОКАЗА ЭКРАНОВ ===
+    // =============================
+    function showScreen(name) {
+      Object.values(screens).forEach(s => s.classList.remove('active'));
+      screens[name].classList.add('active');
+    }
+
+    // =============================
+    // === ИНИЦИАЛИЗАЦИЯ ИГРЫ ===
+    // =============================
     function initBoard() {
       boardEl.innerHTML = '';
       for (let r = 0; r < size; r++) {
@@ -198,11 +303,17 @@
         return;
       }
 
-      const isMyTurn = (playerId === 'host' && currentPlayerTurn === 1) ||
-                       (playerId === 'guest' && currentPlayerTurn === 2);
-
-      gameInfo.textContent = isMyTurn ? `Ваш ход!` : `Ход соперника...`;
-      gameInfo.classList.add(currentPlayerTurn === 1 ? 'player-1-turn' : 'player-2-turn');
+      if (isLocalMode) {
+        gameInfo.textContent = phase === 'placeTraps' 
+          ? `Выбор ловушек: Игрок ${currentPlayer}`
+          : `Ход игрока ${currentPlayer}`;
+        gameInfo.classList.add(currentPlayer === 1 ? 'player-1-turn' : 'player-2-turn');
+      } else {
+        const isMyTurn = (playerRole === 'player1' && currentPlayer === 1) ||
+                         (playerRole === 'player2' && currentPlayer === 2);
+        gameInfo.textContent = isMyTurn ? `Ваш ход!` : `Ход соперника...`;
+        gameInfo.classList.add(currentPlayer === 1 ? 'player-1-turn' : 'player-2-turn');
+      }
     }
 
     function render() {
@@ -211,14 +322,15 @@
         cell.textContent = '';
       });
 
-      if (document.querySelector('.start')) document.querySelector('.start').textContent = '🏠';
-      if (document.querySelector('.treasure')) document.querySelector('.treasure').textContent = '🏆';
+      // Иконки старта и сокровища
+      document.querySelector('.start').textContent = '🏠';
+      document.querySelector('.treasure').textContent = '🏆';
 
-      // Показ ловушек только своих и только в placeTraps
+      // Показ ловушек: только свои и только в фазе расстановки
       if (phase === 'placeTraps') {
-        const myId = playerId === 'host' ? 1 : 2;
+        const myPlayerId = isLocalMode ? currentPlayer : (playerRole === 'player1' ? 1 : 2);
         traps.forEach((owner, key) => {
-          if (owner === myId) {
+          if (owner === myPlayerId) {
             const [r, c] = key.split(',').map(Number);
             const el = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
             if (el) el.textContent = '⚠️';
@@ -226,7 +338,7 @@
         });
       }
 
-      // Игроки
+      // Позиции игроков
       for (const [id, [r, c]] of Object.entries(playerPos)) {
         const el = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
         if (el) {
@@ -238,206 +350,525 @@
       updateGameInfo();
     }
 
-    function sendGameAction(action, data) {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'game', action, data }));
+    // =============================
+    // === ЗВУКИ (Web Audio API) ===
+    // =============================
+    let audioCtx;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      console.log('Web Audio API недоступен');
+    }
+
+    function playTone(freq, dur = 0.1, type = 'sine', vol = 0.15) {
+      if (!audioCtx) return;
+      
+      try {
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = type; 
+        o.frequency.value = freq;
+        g.gain.value = vol;
+        g.connect(audioCtx.destination);
+        o.connect(g);
+        o.start(); 
+        o.stop(audioCtx.currentTime + dur);
+      } catch (e) {
+        console.log('Ошибка воспроизведения звука');
       }
     }
 
-    function handleGameAction(action, data) {
-      switch (action) {
-        case 'sync':
-          // Полная синхронизация состояния
-          currentPlayerTurn = data.currentPlayerTurn;
-          phase = data.phase;
-          traps = new Map(Object.entries(data.traps || {}));
-          playerPos = data.playerPos;
-          trapsPlaced = data.trapsPlaced;
-          render();
-          break;
+    // =============================
+    // === ЛОКАЛЬНЫЙ РЕЖИМ ===
+    // =============================
+    function startLocalGame() {
+      isLocalMode = true;
+      resetGameState();
+      showScreen('game');
+      render();
+    }
 
-        case 'placeTrap':
-          const { row, col, playerId: pId } = data;
-          const owner = pId === 'host' ? 1 : 2;
-          traps.set(`${row},${col}`, owner);
-          trapsPlaced = { ...trapsPlaced, [owner]: (trapsPlaced[owner] || 0) + 1 };
+    function placeTrapLocal(row, col) {
+      if (phase !== 'placeTraps') return;
+      if ((row === 9 && col === 0) || (row === 0 && col === 9)) return;
+      const key = `${row},${col}`;
+      if (traps.has(key)) return;
+
+      traps.set(key, currentPlayer);
+      trapsPlaced[currentPlayer]++;
+
+      playTone(520, 0.15);
+
+      if (trapsPlaced[currentPlayer] >= maxTraps) {
+        currentPlayer = currentPlayer === 1 ? 2 : 1;
+        if (trapsPlaced[currentPlayer] >= maxTraps) {
+          currentPlayer = 1;
+          phase = 'playGame';
+        }
+      }
+      render();
+    }
+
+    function movePlayerLocal(dr, dc) {
+      if (phase !== 'playGame') return;
+      const [r, c] = playerPos[currentPlayer];
+      let nr = r + dr;
+      let nc = c + dc;
+
+      if (nr < 0 || nr >= size || nc < 0 || nc >= size) return;
+      if (Math.abs(dr) + Math.abs(dc) !== 1) return;
+
+      playerPos[currentPlayer] = [nr, nc];
+      playTone(300, 0.1, 'square');
+
+      const key = `${nr},${nc}`;
+      if (traps.has(key)) {
+        const owner = traps.get(key);
+        if (owner !== currentPlayer) {
+          const cell = document.querySelector(`.cell[data-row="${nr}"][data-col="${nc}"]`);
+          cell.classList.add('trap-revealed');
+          cell.textContent = `T${owner}`;
+          playTone(150, 0.4, 'sawtooth', 0.25);
+
+          setTimeout(() => {
+            cell.classList.remove('trap-revealed');
+            cell.textContent = '';
+            playerPos[currentPlayer] = [9, 0];
+            alert(`Игрок ${currentPlayer} попал в ловушку Игрока ${owner}! Возврат на старт.`);
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            render();
+          }, 600);
+          return;
+        }
+      }
+
+      if (nr === 0 && nc === 9) {
+        document.querySelector('.treasure').classList.add('win');
+        if (audioCtx) {
+          const t = audioCtx.currentTime;
+          [523, 659, 784].forEach((f, i) => {
+            const o = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            o.frequency.value = f;
+            g.gain.setValueAtTime(0.12, t + i * 0.2);
+            g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.2 + 0.3);
+            o.connect(g).connect(audioCtx.destination);
+            o.start(t + i * 0.2);
+            o.stop(t + i * 0.2 + 0.3);
+          });
+        }
+        setTimeout(() => {
+          alert(`🎉 Игрок ${currentPlayer} победил!`);
+        }, 300);
+        phase = 'ended';
+        render();
+        return;
+      }
+
+      currentPlayer = currentPlayer === 1 ? 2 : 1;
+      render();
+    }
+
+    // =============================
+    // === ВЕБРТК МУЛЬТИПЛЕЕР ===
+    // =============================
+    function generateRoomId() {
+      return Math.random().toString(36).substring(2, 10).toUpperCase();
+    }
+
+    function setupPeerConnection() {
+      // Генерируем уникальный ID для PeerJS
+      currentPeerId = 'player-' + Math.random().toString(36).substring(2, 12);
+      
+      peer = new Peer(currentPeerId, {
+        host: '0.peerjs.com',
+        port: 443,
+        path: '/',
+        secure: true,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' }
+          ]
+        }
+      });
+
+      peer.on('open', (id) => {
+        console.log('PeerJS ID:', id);
+      });
+
+      peer.on('error', (err) => {
+        console.error('PeerJS ошибка:', err);
+        if (screens.host.classList.contains('active')) {
+          hostStatusEl.textContent = 'Ошибка подключения';
+          hostStatusEl.className = 'connection-status disconnected';
+        }
+      });
+    }
+
+    function createOnlineGame() {
+      if (!peer) setupPeerConnection();
+      
+      roomId = generateRoomId();
+      isHost = true;
+      playerRole = 'player1';
+      
+      hostCodeEl.textContent = roomId;
+      guestCodeEl.value = roomId;
+      
+      // Генерируем QR код
+      generateQRCode(roomId);
+      
+      // Ждем подключения гостя
+      peer.on('connection', (connection) => {
+        conn = connection;
+        setupConnectionEvents();
+        
+        // Отправляем начальное состояние
+        sendGameState();
+        
+        // Показываем, что гость подключился
+        document.querySelector('#host-screen .players-list').innerHTML = `
+          <div>Игрок 1 (Вы): ✅ Онлайн</div>
+          <div>Игрок 2: ✅ Подключен!</div>
+        `;
+        
+        setTimeout(() => {
+          startOnlineGame();
+        }, 1000);
+      });
+      
+      showScreen('host');
+    }
+
+    function joinOnlineGame(code) {
+      if (!code || code.length < 4) {
+        alert('Введите действительный код комнаты');
+        return;
+      }
+      
+      roomId = code.toUpperCase();
+      isHost = false;
+      playerRole = 'player2';
+      
+      if (!peer) setupPeerConnection();
+      
+      guestCodeEl.value = roomId;
+      guestStatusEl.textContent = 'Статус: Поиск хоста...';
+      guestStatusEl.className = 'connection-status connecting';
+      
+      showScreen('guest');
+      
+      // Пытаемся подключиться к хосту
+      const hostId = 'host-' + roomId;
+      
+      // Создаем временное соединение для поиска
+      const tempConn = peer.connect(hostId);
+      tempConn.on('open', () => {
+        tempConn.close();
+        
+        // Настоящее подключение
+        conn = peer.connect(hostId);
+        setupConnectionEvents();
+        
+        guestStatusEl.textContent = 'Статус: Подключено! Ожидание игры...';
+        guestStatusEl.className = 'connection-status connected';
+        
+        // Ждем начала игры от хоста
+      });
+      
+      tempConn.on('error', (err) => {
+        console.error('Ошибка подключения:', err);
+        guestStatusEl.textContent = 'Статус: Хост не найден';
+        guestStatusEl.className = 'connection-status disconnected';
+      });
+    }
+
+    function setupConnectionEvents() {
+      conn.on('open', () => {
+        console.log('Соединение установлено');
+      });
+
+      conn.on('data', (data) => {
+        handleNetworkMessage(data);
+      });
+
+      conn.on('close', () => {
+        console.log('Соединение закрыто');
+        if (screens.game.classList.contains('active')) {
+          alert('Соединение с соперником потеряно. Игра прекращена.');
+          showScreen('menu');
+        }
+      });
+
+      conn.on('error', (err) => {
+        console.error('Ошибка соединения:', err);
+      });
+    }
+
+    function handleNetworkMessage(data) {
+      if (!data.type) return;
+      
+      switch (data.type) {
+        case 'game_state':
+          syncGameState(data.state);
+          break;
+          
+        case 'game_action':
+          processRemoteAction(data.action, data.payload);
+          break;
+          
+        case 'game_start':
+          startOnlineGame();
+          break;
+      }
+    }
+
+    function sendGameState() {
+      if (!conn || conn.open !== true) return;
+      
+      conn.send({
+        type: 'game_state',
+        state: {
+          currentPlayer,
+          phase,
+          traps: Object.fromEntries(traps),
+          playerPos,
+          trapsPlaced
+        }
+      });
+    }
+
+    function sendGameAction(action, payload) {
+      if (!conn || conn.open !== true) return;
+      
+      conn.send({
+        type: 'game_action',
+        action,
+        payload
+      });
+    }
+
+    function syncGameState(state) {
+      currentPlayer = state.currentPlayer;
+      phase = state.phase;
+      traps = new Map(Object.entries(state.traps || {}));
+      playerPos = state.playerPos;
+      trapsPlaced = state.trapsPlaced;
+      render();
+    }
+
+    function processRemoteAction(action, payload) {
+      switch (action) {
+        case 'place_trap':
+          if (phase !== 'placeTraps') return;
+          
+          const { row, col, playerId } = payload;
+          const key = `${row},${col}`;
+          
+          if ((row === 9 && col === 0) || (row === 0 && col === 9)) return;
+          if (traps.has(key)) return;
+          
+          traps.set(key, playerId);
+          trapsPlaced[playerId]++;
+          
+          // Проверяем завершение расстановки
           if (trapsPlaced[1] >= maxTraps && trapsPlaced[2] >= maxTraps) {
             phase = 'playGame';
-            currentPlayerTurn = 1;
+            currentPlayer = 1;
+          } else {
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
           }
+          
           render();
           break;
-
+          
         case 'move':
-          const { dr, dc, movingPlayerId } = data;
-          const mPlayer = movingPlayerId === 'host' ? 1 : 2;
-          const [r, c] = playerPos[mPlayer];
-          playerPos[mPlayer] = [r + dr, c + dc];
-
-          const key = `${r + dr},${c + dc}`;
-          if (traps.has(key)) {
-            const owner = traps.get(key);
-            if (owner !== mPlayer) {
-              // Попал в ловушку соперника — возврат
+          if (phase !== 'playGame') return;
+          
+          const { dr, dc, movingPlayerId } = payload;
+          const [r, c] = playerPos[movingPlayerId];
+          const nr = r + dr;
+          const nc = c + dc;
+          
+          // Проверка границ
+          if (nr < 0 || nr >= size || nc < 0 || nc >= size) return;
+          if (Math.abs(dr) + Math.abs(dc) !== 1) return;
+          
+          playerPos[movingPlayerId] = [nr, nc];
+          
+          const moveKey = `${nr},${nc}`;
+          
+          // Проверка ловушек
+          if (traps.has(moveKey)) {
+            const trapOwner = traps.get(moveKey);
+            if (trapOwner !== movingPlayerId) {
+              // Попал в чужую ловушку
               setTimeout(() => {
-                playerPos[mPlayer] = [9, 0];
-                currentPlayerTurn = currentPlayerTurn === 1 ? 2 : 1;
-                sendGameAction('sync', {
-                  currentPlayerTurn,
-                  phase,
-                  traps: Object.fromEntries(traps),
-                  playerPos,
-                  trapsPlaced
-                });
+                playerPos[movingPlayerId] = [9, 0];
+                if (movingPlayerId === currentPlayer) {
+                  currentPlayer = currentPlayer === 1 ? 2 : 1;
+                }
                 render();
               }, 600);
             }
           }
-
+          
           // Проверка победы
-          if (playerPos[mPlayer][0] === 0 && playerPos[mPlayer][1] === 9) {
+          if (nr === 0 && nc === 9) {
             phase = 'ended';
-          } else if (!traps.has(key) || (traps.has(key) && traps.get(key) === mPlayer)) {
+          } else if (!traps.has(moveKey) || traps.get(moveKey) === movingPlayerId) {
             // Передача хода
-            currentPlayerTurn = currentPlayerTurn === 1 ? 2 : 1;
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
           }
-
-          sendGameAction('sync', {
-            currentPlayerTurn,
-            phase,
-            traps: Object.fromEntries(traps),
-            playerPos,
-            trapsPlaced
-          });
+          
           render();
           break;
       }
     }
 
-    // === СОБЫТИЯ ИГРЫ ===
+    function startOnlineGame() {
+      resetGameState();
+      showScreen('game');
+      render();
+      
+      if (isHost) {
+        // Хост отправляет команду начала игры
+        setTimeout(() => {
+          sendGameState();
+        }, 500);
+      }
+    }
+
+    function resetGameState() {
+      currentPlayer = 1;
+      phase = 'placeTraps';
+      traps = new Map();
+      playerPos = { 1: [9, 0], 2: [9, 0] };
+      trapsPlaced = { 1: 0, 2: 0 };
+      initBoard();
+    }
+
+    // =============================
+    // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
+    // =============================
+    function generateQRCode(data) {
+      try {
+        const qr = qrcode(0, 'L');
+        qr.addData(data);
+        qr.make();
+        qrCodeEl.innerHTML = qr.createImgTag(4, 10);
+      } catch (e) {
+        console.error('Ошибка генерации QR кода:', e);
+        qrCodeEl.innerHTML = '<div>QR код недоступен</div>';
+      }
+    }
+
+    // =============================
+    // === ОБРАБОТЧИКИ СОБЫТИЙ ===
+    // =============================
     boardEl.addEventListener('click', (e) => {
       if (!e.target.classList.contains('cell') || phase === 'ended') return;
-
+      
       const r = parseInt(e.target.dataset.row);
       const c = parseInt(e.target.dataset.col);
 
-      if (phase === 'placeTraps') {
-        const isMyTurn = (playerId === 'host' && currentPlayerTurn === 1) ||
-                         (playerId === 'guest' && currentPlayerTurn === 2);
-        if (!isMyTurn) return;
+      if (isLocalMode) {
+        if (phase === 'placeTraps') {
+          placeTrapLocal(r, c);
+        } else if (phase === 'playGame') {
+          const [pr, pc] = playerPos[currentPlayer];
+          movePlayerLocal(r - pr, c - pc);
+        }
+      } else {
+        // Онлайн режим
+        if (phase === 'placeTraps') {
+          const isMyTurn = (playerRole === 'player1' && currentPlayer === 1) ||
+                           (playerRole === 'player2' && currentPlayer === 2);
+          if (!isMyTurn) return;
 
-        if ((r === 9 && c === 0) || (r === 0 && c === 9)) return;
-        const key = `${r},${c}`;
-        if (traps.has(key)) return;
+          if ((r === 9 && c === 0) || (r === 0 && c === 9)) return;
+          const key = `${r},${c}`;
+          
+          // Отправляем действие
+          sendGameAction('place_trap', { 
+            row: r, 
+            col: c, 
+            playerId: playerRole === 'player1' ? 1 : 2 
+          });
+        } else if (phase === 'playGame') {
+          const isMyTurn = (playerRole === 'player1' && currentPlayer === 1) ||
+                           (playerRole === 'player2' && currentPlayer === 2);
+          if (!isMyTurn) return;
 
-        // Отправляем действие
-        sendGameAction('placeTrap', { row: r, col: c, playerId });
-        // Локально не обрабатываем — ждём синхронизацию от сервера
-      } else if (phase === 'playGame') {
-        const isMyTurn = (playerId === 'host' && currentPlayerTurn === 1) ||
-                         (playerId === 'guest' && currentPlayerTurn === 2);
-        if (!isMyTurn) return;
-
-        const myPlayerId = playerId === 'host' ? 1 : 2;
-        const [pr, pc] = playerPos[myPlayerId];
-        const dr = r - pr;
-        const dc = c - pc;
-        if (Math.abs(dr) + Math.abs(dc) !== 1) return;
-
-        sendGameAction('move', { dr, dc, movingPlayerId: playerId });
+          const myPlayerId = playerRole === 'player1' ? 1 : 2;
+          const [pr, pc] = playerPos[myPlayerId];
+          const dr = r - pr;
+          const dc = c - pc;
+          
+          if (Math.abs(dr) + Math.abs(dc) !== 1) return;
+          
+          // Отправляем действие
+          sendGameAction('move', { 
+            dr, 
+            dc, 
+            movingPlayerId: myPlayerId 
+          });
+        }
       }
     });
 
-    // === ОБРАБОТКА КНОПОК ===
-    document.getElementById('btn-create').onclick = () => {
-      roomId = generateRoomId();
-      connectToRoom(roomId, true);
-    };
-
+    // =============================
+    // === КНОПКИ МЕНЮ ===
+    // =============================
+    document.getElementById('btn-local').onclick = startLocalGame;
+    
+    document.getElementById('btn-create').onclick = createOnlineGame;
+    
     document.getElementById('btn-join').onclick = () => {
-      const code = document.getElementById('room-code').value.trim().toUpperCase();
+      const code = document.getElementById('room-code').value.trim();
       if (code) {
-        connectToRoom(code, false);
+        joinOnlineGame(code);
+      } else {
+        alert('Введите код комнаты');
       }
     };
-
-    document.getElementById('btn-lobby-back').onclick = () => {
-      if (ws) ws.close();
+    
+    document.getElementById('btn-cancel-host').onclick = () => {
+      if (conn) conn.close();
+      if (peer) peer.destroy();
+      peer = null;
       showScreen('menu');
     };
-
+    
+    document.getElementById('btn-cancel-guest').onclick = () => {
+      if (conn) conn.close();
+      if (peer) peer.destroy();
+      peer = null;
+      showScreen('menu');
+    };
+    
     document.getElementById('btn-game-back').onclick = () => {
-      if (ws) ws.close();
+      if (conn) conn.close();
+      if (peer) peer.destroy();
+      peer = null;
       showScreen('menu');
     };
 
-    // === ПОДКЛЮЧЕНИЕ К ЛОББИ ===
-    function connectToRoom(id, asHost) {
-      roomId = id;
-      isHost = asHost;
-      playerId = asHost ? 'host' : 'guest';
-
-      const url = `wss://socketsbay.com/wss/v2/2/${roomId}/`;
-      ws = new WebSocket(url);
-
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ type: 'join', playerId, isHost }));
-        showScreen('lobby');
-        updateLobbyUI('Подключение...');
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'lobby') {
-            updateLobbyUI(msg.status, msg.players);
-            document.getElementById('btn-start').disabled = !msg.canStart;
-          } else if (msg.type === 'game_start') {
-            // Начинаем игру
-            currentPlayerTurn = 1;
-            phase = 'placeTraps';
-            traps = new Map();
-            playerPos = { 1: [9, 0], 2: [9, 0] };
-            trapsPlaced = { 1: 0, 2: 0 };
-            initBoard();
-            showScreen('game');
-            render();
-          } else if (msg.type === 'game') {
-            handleGameAction(msg.action, msg.data);
-          }
-        } catch (e) {
-          console.error('Ошибка парсинга:', e);
+    // =============================
+    // === ИНИЦИАЛИЗАЦИЯ ===
+    // =============================
+    window.onload = () => {
+      initBoard();
+      
+      // Попытка инициализировать аудио по первому клику
+      document.body.addEventListener('click', () => {
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
         }
-      };
-
-      ws.onclose = () => {
-        alert('Соединение с лобби потеряно.');
-        showScreen('menu');
-      };
-
-      ws.onerror = (err) => {
-        console.error('WebSocket ошибка:', err);
-      };
-    }
-
-    function updateLobbyUI(status, players = []) {
-      const lobbyInfo = document.getElementById('lobby-info');
-      lobbyInfo.innerHTML = `
-        <div>Код лобби: <strong>${roomId}</strong></div>
-        <div>Игроки: ${players.length}/2</div>
-        <div>${players.map(p => p === 'host' ? 'Игрок 1 (хозяин)' : 'Игрок 2').join(', ') || '—'}</div>
-        <div style="margin-top:10px;">${status}</div>
-      `;
-    }
-
-    document.getElementById('btn-start').onclick = () => {
-      if (isHost && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'start_game' }));
-      }
+      }, { once: true });
     };
-
-    // Инициализация
-    initBoard();
   </script>
 </body>
 </html>
