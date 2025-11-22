@@ -5,43 +5,144 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Остров сокровищ и ловушки</title>
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       text-align: center;
-      background: #f0e68c;
+      background: linear-gradient(135deg, #6dd5ed, #2193b0);
+      color: #2c3e50;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
       padding: 20px;
     }
-    h1 { color: #8b4513; }
-    #game-info {
-      margin: 15px;
-      font-size: 18px;
-      font-weight: bold;
+
+    h1 {
+      font-size: 2.4rem;
+      margin-bottom: 10px;
+      color: #fff;
+      text-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
+
+    #game-info {
+      font-size: 1.2rem;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.85);
+      padding: 10px 20px;
+      border-radius: 30px;
+      margin: 15px 0;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      transition: all 0.3s ease;
+    }
+
     #board {
       display: inline-grid;
-      grid-template-columns: repeat(10, 40px);
-      gap: 2px;
+      grid-template-columns: repeat(10, 45px);
+      gap: 3px;
       margin: 20px auto;
+      background: rgba(255,255,255,0.2);
+      padding: 10px;
+      border-radius: 12px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.2);
     }
+
     .cell {
-      width: 40px;
-      height: 40px;
-      background: #add8e6;
-      border: 1px solid #000;
+      width: 45px;
+      height: 45px;
+      background: #e0f7fa;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: bold;
       cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    .start { background: #90ee90; }
-    .treasure { background: #ffd700; }
-    .player { background: #ffcccb; }
-    .trap { background: #ff6347; }
+
+    .cell:hover {
+      transform: scale(1.05);
+      background: #b2ebf2;
+    }
+
+    .start {
+      background: linear-gradient(135deg, #4caf50, #8bc34a);
+      color: white;
+    }
+
+    .treasure {
+      background: linear-gradient(135deg, #ffd700, #ffaa00);
+      color: #333;
+    }
+
+    .player {
+      background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+      color: white;
+    }
+
+    .trap-1 {
+      background: linear-gradient(135deg, #4a90e2, #7abaff);
+      color: white;
+    }
+
+    .trap-2 {
+      background: linear-gradient(135deg, #9b59b6, #b388ff);
+      color: white;
+    }
+
+    .trap-revealed {
+      animation: flashTrap 0.6s ease;
+    }
+
+    @keyframes flashTrap {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,0,0,0.4); }
+      50% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(255,0,0,0); }
+    }
+
+    #controls {
+      margin-top: 20px;
+    }
+
     button {
-      padding: 8px 16px;
-      font-size: 16px;
-      margin: 5px;
+      padding: 10px 20px;
+      font-size: 1rem;
+      margin: 0 8px;
+      border: none;
+      border-radius: 30px;
+      background: #fff;
+      color: #2c3e50;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+      transition: all 0.2s ease;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 12px rgba(0,0,0,0.2);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .win {
+      animation: celebrate 1.2s ease infinite;
+    }
+
+    @keyframes celebrate {
+      0%, 100% { transform: rotate(0deg); }
+      25% { transform: rotate(5deg); }
+      75% { transform: rotate(-5deg); }
     }
   </style>
 </head>
@@ -49,7 +150,7 @@
   <h1>🏝️ Остров сокровищ и ловушки</h1>
   <div id="game-info">Выбор ловушек: Игрок 1</div>
   <div id="board"></div>
-  <div>
+  <div id="controls">
     <button id="next-action">Далее</button>
     <button id="reset">Начать заново</button>
   </div>
@@ -58,8 +159,8 @@
     const size = 10;
     let currentPlayer = 1;
     let phase = 'placeTraps'; // placeTraps или playGame
-    let traps = new Set(); // координаты ловушек в формате 'row,col'
-    let playerPos = { 1: [9, 0], 2: [9, 0] }; // [row, col], старт в левом нижнем
+    let traps = new Map(); // key: 'row,col', value: playerId
+    let playerPos = { 1: [9, 0], 2: [9, 0] };
     let trapsPlaced = { 1: 0, 2: 0 };
     let maxTraps = 3;
 
@@ -68,7 +169,6 @@
     const nextBtn = document.getElementById('next-action');
     const resetBtn = document.getElementById('reset');
 
-    // Инициализация поля
     function initBoard() {
       board.innerHTML = '';
       for (let r = 0; r < size; r++) {
@@ -79,49 +179,64 @@
           cell.dataset.col = c;
           if (r === 9 && c === 0) cell.classList.add('start');
           if (r === 0 && c === 9) cell.classList.add('treasure');
-          cell.textContent = '';
           board.appendChild(cell);
         }
       }
     }
 
-    // Обновление отображения
     function render() {
-      // Очистка меток
       document.querySelectorAll('.cell').forEach(cell => {
-        cell.classList.remove('player');
+        cell.classList.remove('player', 'trap-1', 'trap-2', 'trap-revealed');
         if (!cell.classList.contains('start') && !cell.classList.contains('treasure')) {
-          cell.classList.remove('trap');
+          cell.textContent = '';
         }
       });
 
-      // Показываем положение текущего игрока
-      const [r, c] = playerPos[currentPlayer];
-      const playerCell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
-      if (playerCell) playerCell.classList.add('player');
+      // Отрисовка ловушек
+      traps.forEach((owner, key) => {
+        const [r, c] = key.split(',').map(Number);
+        const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+        if (cell) {
+          cell.classList.add(`trap-${owner}`);
+          cell.textContent = '⚠️';
+        }
+      });
 
-      // Информация о фазе
+      // Позиции игроков
+      Object.entries(playerPos).forEach(([id, [r, c]]) => {
+        const cell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+        if (cell) {
+          cell.classList.add('player');
+          cell.textContent = `P${id}`;
+        }
+      });
+
+      // Сокровище и старт — иконки
+      document.querySelector('.start').textContent = '🏠';
+      document.querySelector('.treasure').textContent = '🏆';
+
+      // Обновление инфо
       if (phase === 'placeTraps') {
         info.textContent = `Выбор ловушек: Игрок ${currentPlayer}`;
-      } else {
+      } else if (phase === 'playGame') {
         info.textContent = `Ход игрока ${currentPlayer}`;
+      } else if (phase === 'ended') {
+        info.textContent = 'Игра окончена!';
       }
     }
 
-    // Установка ловушки
     function placeTrap(row, col) {
       if (phase !== 'placeTraps') return;
-      if ((row === 9 && col === 0) || (row === 0 && col === 9)) return; // нельзя в старт/сокровище
+      if ((row === 9 && col === 0) || (row === 0 && col === 9)) return;
       const key = `${row},${col}`;
-      if (traps.has(key)) return; // уже есть ловушка
+      if (traps.has(key)) return;
 
-      traps.add(key);
+      traps.set(key, currentPlayer);
       trapsPlaced[currentPlayer]++;
 
       if (trapsPlaced[currentPlayer] >= maxTraps) {
         currentPlayer = currentPlayer === 1 ? 2 : 1;
         if (trapsPlaced[currentPlayer] >= maxTraps) {
-          // Все поставили ловушки — начинаем игру
           currentPlayer = 1;
           phase = 'playGame';
         }
@@ -129,42 +244,43 @@
       render();
     }
 
-    // Перемещение игрока
     function movePlayer(dr, dc) {
       if (phase !== 'playGame') return;
       const [r, c] = playerPos[currentPlayer];
       let nr = r + dr;
       let nc = c + dc;
 
-      // Проверка границ
       if (nr < 0 || nr >= size || nc < 0 || nc >= size) return;
 
       playerPos[currentPlayer] = [nr, nc];
 
-      // Проверка ловушки
       const key = `${nr},${nc}`;
       if (traps.has(key)) {
-        // Сработала ловушка!
-        playerPos[currentPlayer] = [9, 0]; // возврат на старт
-        // Показываем ловушку красным (палево!)
+        // Анимация и откат
         const trapCell = document.querySelector(`.cell[data-row="${nr}"][data-col="${nc}"]`);
-        trapCell.classList.add('trap');
-        setTimeout(() => alert(`Игрок ${currentPlayer} попал в ловушку! Возврат на старт.`), 50);
+        trapCell.classList.add('trap-revealed');
+        setTimeout(() => {
+          playerPos[currentPlayer] = [9, 0];
+          alert(`Игрок ${currentPlayer} попал в ловушку! Возврат на старт.`);
+          render();
+        }, 600);
+        return;
       }
 
-      // Проверка победы
       if (nr === 0 && nc === 9) {
-        alert(`Игрок ${currentPlayer} нашёл сокровище! Победа! 🎉`);
+        const winCell = document.querySelector('.treasure');
+        winCell.classList.add('win');
+        setTimeout(() => {
+          alert(`Игрок ${currentPlayer} нашёл сокровище! Победа! 🎉`);
+        }, 300);
         phase = 'ended';
         return;
       }
 
-      // Передача хода
       currentPlayer = currentPlayer === 1 ? 2 : 1;
       render();
     }
 
-    // Обработчики
     board.addEventListener('click', (e) => {
       if (!e.target.classList.contains('cell')) return;
       const r = parseInt(e.target.dataset.row);
@@ -172,16 +288,18 @@
 
       if (phase === 'placeTraps') {
         placeTrap(r, c);
+      } else if (phase === 'playGame') {
+        const [pr, pc] = playerPos[currentPlayer];
+        const dr = r - pr;
+        const dc = c - pc;
+        if (Math.abs(dr) + Math.abs(dc) === 1) {
+          movePlayer(dr, dc);
+        }
       }
     });
 
-    // Управление ходами через кнопку (или можно добавить стрелки позже)
     nextBtn.addEventListener('click', () => {
-      if (phase === 'playGame') {
-        // Пока просто сообщим, что ход делается кликом по клетке (вверх/вниз и т.д.)
-        // Но для упрощения — просто выведем подсказку
-        alert('Кликните на клетку рядом с вашей фишкой, чтобы туда сходить.');
-      } else if (phase === 'placeTraps' && trapsPlaced[1] >= maxTraps && trapsPlaced[2] >= maxTraps) {
+      if (phase === 'placeTraps' && trapsPlaced[1] >= maxTraps && trapsPlaced[2] >= maxTraps) {
         phase = 'playGame';
         currentPlayer = 1;
         render();
@@ -192,7 +310,6 @@
       location.reload();
     });
 
-    // Инициализация
     initBoard();
     render();
   </script>
