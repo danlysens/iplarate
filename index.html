@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Остров сокровищ и ловушки</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f0e68c;
+      padding: 20px;
+    }
+    h1 { color: #8b4513; }
+    #game-info {
+      margin: 15px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    #board {
+      display: inline-grid;
+      grid-template-columns: repeat(10, 40px);
+      gap: 2px;
+      margin: 20px auto;
+    }
+    .cell {
+      width: 40px;
+      height: 40px;
+      background: #add8e6;
+      border: 1px solid #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .start { background: #90ee90; }
+    .treasure { background: #ffd700; }
+    .player { background: #ffcccb; }
+    .trap { background: #ff6347; }
+    button {
+      padding: 8px 16px;
+      font-size: 16px;
+      margin: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🏝️ Остров сокровищ и ловушки</h1>
+  <div id="game-info">Выбор ловушек: Игрок 1</div>
+  <div id="board"></div>
+  <div>
+    <button id="next-action">Далее</button>
+    <button id="reset">Начать заново</button>
+  </div>
+
+  <script>
+    const size = 10;
+    let currentPlayer = 1;
+    let phase = 'placeTraps'; // placeTraps или playGame
+    let traps = new Set(); // координаты ловушек в формате 'row,col'
+    let playerPos = { 1: [9, 0], 2: [9, 0] }; // [row, col], старт в левом нижнем
+    let trapsPlaced = { 1: 0, 2: 0 };
+    let maxTraps = 3;
+
+    const board = document.getElementById('board');
+    const info = document.getElementById('game-info');
+    const nextBtn = document.getElementById('next-action');
+    const resetBtn = document.getElementById('reset');
+
+    // Инициализация поля
+    function initBoard() {
+      board.innerHTML = '';
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          const cell = document.createElement('div');
+          cell.classList.add('cell');
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          if (r === 9 && c === 0) cell.classList.add('start');
+          if (r === 0 && c === 9) cell.classList.add('treasure');
+          cell.textContent = '';
+          board.appendChild(cell);
+        }
+      }
+    }
+
+    // Обновление отображения
+    function render() {
+      // Очистка меток
+      document.querySelectorAll('.cell').forEach(cell => {
+        cell.classList.remove('player');
+        if (!cell.classList.contains('start') && !cell.classList.contains('treasure')) {
+          cell.classList.remove('trap');
+        }
+      });
+
+      // Показываем положение текущего игрока
+      const [r, c] = playerPos[currentPlayer];
+      const playerCell = document.querySelector(`.cell[data-row="${r}"][data-col="${c}"]`);
+      if (playerCell) playerCell.classList.add('player');
+
+      // Информация о фазе
+      if (phase === 'placeTraps') {
+        info.textContent = `Выбор ловушек: Игрок ${currentPlayer}`;
+      } else {
+        info.textContent = `Ход игрока ${currentPlayer}`;
+      }
+    }
+
+    // Установка ловушки
+    function placeTrap(row, col) {
+      if (phase !== 'placeTraps') return;
+      if ((row === 9 && col === 0) || (row === 0 && col === 9)) return; // нельзя в старт/сокровище
+      const key = `${row},${col}`;
+      if (traps.has(key)) return; // уже есть ловушка
+
+      traps.add(key);
+      trapsPlaced[currentPlayer]++;
+
+      if (trapsPlaced[currentPlayer] >= maxTraps) {
+        currentPlayer = currentPlayer === 1 ? 2 : 1;
+        if (trapsPlaced[currentPlayer] >= maxTraps) {
+          // Все поставили ловушки — начинаем игру
+          currentPlayer = 1;
+          phase = 'playGame';
+        }
+      }
+      render();
+    }
+
+    // Перемещение игрока
+    function movePlayer(dr, dc) {
+      if (phase !== 'playGame') return;
+      const [r, c] = playerPos[currentPlayer];
+      let nr = r + dr;
+      let nc = c + dc;
+
+      // Проверка границ
+      if (nr < 0 || nr >= size || nc < 0 || nc >= size) return;
+
+      playerPos[currentPlayer] = [nr, nc];
+
+      // Проверка ловушки
+      const key = `${nr},${nc}`;
+      if (traps.has(key)) {
+        // Сработала ловушка!
+        playerPos[currentPlayer] = [9, 0]; // возврат на старт
+        // Показываем ловушку красным (палево!)
+        const trapCell = document.querySelector(`.cell[data-row="${nr}"][data-col="${nc}"]`);
+        trapCell.classList.add('trap');
+        setTimeout(() => alert(`Игрок ${currentPlayer} попал в ловушку! Возврат на старт.`), 50);
+      }
+
+      // Проверка победы
+      if (nr === 0 && nc === 9) {
+        alert(`Игрок ${currentPlayer} нашёл сокровище! Победа! 🎉`);
+        phase = 'ended';
+        return;
+      }
+
+      // Передача хода
+      currentPlayer = currentPlayer === 1 ? 2 : 1;
+      render();
+    }
+
+    // Обработчики
+    board.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('cell')) return;
+      const r = parseInt(e.target.dataset.row);
+      const c = parseInt(e.target.dataset.col);
+
+      if (phase === 'placeTraps') {
+        placeTrap(r, c);
+      }
+    });
+
+    // Управление ходами через кнопку (или можно добавить стрелки позже)
+    nextBtn.addEventListener('click', () => {
+      if (phase === 'playGame') {
+        // Пока просто сообщим, что ход делается кликом по клетке (вверх/вниз и т.д.)
+        // Но для упрощения — просто выведем подсказку
+        alert('Кликните на клетку рядом с вашей фишкой, чтобы туда сходить.');
+      } else if (phase === 'placeTraps' && trapsPlaced[1] >= maxTraps && trapsPlaced[2] >= maxTraps) {
+        phase = 'playGame';
+        currentPlayer = 1;
+        render();
+      }
+    });
+
+    resetBtn.addEventListener('click', () => {
+      location.reload();
+    });
+
+    // Инициализация
+    initBoard();
+    render();
+  </script>
+</body>
+</html>
