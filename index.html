@@ -3,9 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Остров сокровищ и ловушки — Мультиплеер</title>
-  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <title>Остров сокровищ — Стабильный мультиплеер</title>
   <style>
     * { box-sizing: border-box; user-select: none; }
     body {
@@ -47,6 +45,7 @@
     .btn.green { background: #2ecc71; color: white; }
     .btn.blue { background: #3498db; color: white; }
     .btn.red { background: #e74c3c; color: white; }
+    .btn.yellow { background: #f39c12; color: white; }
     .input-group {
       margin: 20px 0;
       display: flex;
@@ -141,6 +140,7 @@
     .connected { background: #2ecc71; color: white; }
     .connecting { background: #f39c12; color: white; }
     .disconnected { background: #e74c3c; color: white; }
+    .reconnecting { background: #9b59b6; color: white; }
     #qr-container {
       margin: 20px 0;
       display: flex;
@@ -167,6 +167,25 @@
       font-size: 0.95rem;
       line-height: 1.4;
     }
+    .retry-info {
+      background: rgba(255,255,255,0.2);
+      padding: 8px;
+      border-radius: 8px;
+      margin: 8px 0;
+      font-size: 0.9rem;
+    }
+    .connection-log {
+      height: 100px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.2);
+      color: white;
+      padding: 10px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 0.85rem;
+      margin: 15px 0;
+      text-align: left;
+    }
   </style>
 </head>
 <body>
@@ -180,15 +199,15 @@
       <button id="btn-join" class="btn blue">🔗 Присоединиться</button>
     </div>
     <div class="instructions">
-      <strong>Как играть онлайн:</strong><br>
-      1. Хост создает игру и получает код<br>
-      2. Гость вводит код хоста<br>
-      3. Хост подтверждает подключение<br>
-      4. Игра начинается автоматически!
+      <strong>Надежное подключение:</strong><br>
+      • Автоматические повторные попытки<br>
+      • Резервный WebSocket-канал<br>
+      • Таймауты для предотвращения зависаний<br>
+      • Автоматическое восстановление соединения
     </div>
     <div class="status">
       Для онлайн-игры нужен интернет.<br>
-      Все данные передаются напрямую между браузерами.
+      Система сама выберет лучший способ подключения.
     </div>
   </div>
 
@@ -206,6 +225,7 @@
       <div>Игрок 1 (Вы): ✅ Онлайн</div>
       <div>Игрок 2: ⏳ Ожидание...</div>
     </div>
+    <div class="connection-log" id="host-log"></div>
     <button id="btn-cancel-host" class="btn red">Отменить</button>
   </div>
 
@@ -217,7 +237,13 @@
     <div class="connection-status connecting" id="guest-status">
       Статус: Подключение...
     </div>
+    <div class="retry-info">
+      Если зависло — нажмите "Отменить" и попробуйте еще раз.<br>
+      Система автоматически попробует разные способы подключения.
+    </div>
+    <div class="connection-log" id="guest-log"></div>
     <button id="btn-cancel-guest" class="btn red">Отменить</button>
+    <button id="btn-force-websocket" class="btn yellow hidden">🔄 Переключиться на WebSocket</button>
   </div>
 
   <!-- Игра -->
@@ -229,6 +255,9 @@
       <div>Игрок 1: <span id="player1-status">🟢 Онлайн</span></div>
       <div>Игрок 2: <span id="player2-status">🟢 Онлайн</span></div>
     </div>
+    <div class="connection-status connected" id="game-connection-status">
+      Соединение: Стабильное
+    </div>
     <button id="btn-game-back" class="btn red">Выйти из игры</button>
   </div>
 
@@ -237,12 +266,20 @@
     // === ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ===
     // =============================
     let peer = null;
+    let websocket = null;
     let currentPeerId = null;
     let conn = null;
     let roomId = null;
     let isHost = false;
     let isLocalMode = false;
     let playerRole = null; // 'player1' или 'player2'
+    let connectionType = 'webrtc'; // 'webrtc' или 'websocket'
+    let connectionAttempts = 0;
+    let maxAttempts = 5;
+    let reconnectTimeout = null;
+    let connectionEstablished = false;
+    let lastActivity = Date.now();
+    let heartbeatInterval = null;
 
     // Игровое состояние
     const size = 10;
@@ -267,6 +304,30 @@
     const guestCodeEl = document.getElementById('guest-code');
     const hostStatusEl = document.getElementById('host-status');
     const guestStatusEl = document.getElementById('guest-status');
+    const hostLogEl = document.getElementById('host-log');
+    const guestLogEl = document.getElementById('guest-log');
+    const gameConnectionStatusEl = document.getElementById('game-connection-status');
+    const forceWebsocketBtn = document.getElementById('btn-force-websocket');
+
+    // =============================
+    // === ФУНКЦИИ ЛОГИРОВАНИЯ ===
+    // =============================
+    function logMessage(element, message, isError = false) {
+      const timestamp = new Date().toLocaleTimeString();
+      const logEntry = document.createElement('div');
+      logEntry.style.color = isError ? '#ff6b6b' : '#4ecdc4';
+      logEntry.innerHTML = `<span style="color:#aaa;">[${timestamp}]</span> ${message}`;
+      element.appendChild(logEntry);
+      element.scrollTop = element.scrollHeight;
+    }
+
+    function logHost(message, isError = false) {
+      logMessage(hostLogEl, message, isError);
+    }
+
+    function logGuest(message, isError = false) {
+      logMessage(guestLogEl, message, isError);
+    }
 
     // =============================
     // === ФУНКЦИИ ПОКАЗА ЭКРАНОВ ===
@@ -274,6 +335,216 @@
     function showScreen(name) {
       Object.values(screens).forEach(s => s.classList.remove('active'));
       screens[name].classList.add('active');
+    }
+
+    // =============================
+    // === НАДЕЖНОЕ СОЕДИНЕНИЕ ===
+    // =============================
+    function setupStableConnection() {
+      // Запускаем heartbeat для отслеживания активности
+      startHeartbeat();
+      
+      // Устанавливаем обработчик неактивности
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      // Обработчик закрытия вкладки
+      window.addEventListener('beforeunload', cleanupConnections);
+    }
+
+    function startHeartbeat() {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = setInterval(() => {
+        if (!connectionEstablished) return;
+        
+        const now = Date.now();
+        if (now - lastActivity > 30000) { // 30 секунд без активности
+          logMessage(gameConnectionStatusEl.parentElement, 'Обнаружена неактивность, проверка соединения...', true);
+          checkConnectionHealth();
+        }
+      }, 10000); // Проверяем каждые 10 секунд
+    }
+
+    function checkConnectionHealth() {
+      if (connectionType === 'webrtc' && conn && conn.open) {
+        try {
+          conn.send({ type: 'heartbeat', timestamp: Date.now() });
+          return true;
+        } catch (e) {
+          logMessage(gameConnectionStatusEl.parentElement, 'WebRTC heartbeat failed, переключение на WebSocket...', true);
+          switchToWebsocketFallback();
+          return false;
+        }
+      } else if (connectionType === 'websocket' && websocket && websocket.readyState === WebSocket.OPEN) {
+        try {
+          websocket.send(JSON.stringify({ type: 'heartbeat', timestamp: Date.now() }));
+          return true;
+        } catch (e) {
+          logMessage(gameConnectionStatusEl.parentElement, 'WebSocket heartbeat failed, попытка восстановления...', true);
+          attemptReconnect();
+          return false;
+        }
+      }
+      return false;
+    }
+
+    function switchToWebsocketFallback() {
+      connectionType = 'websocket';
+      
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        logMessage(gameConnectionStatusEl.parentElement, 'Уже используем WebSocket, переключение не требуется');
+        return;
+      }
+      
+      // Закрываем WebRTC соединение
+      if (conn) {
+        try { conn.close(); } catch (e) {}
+        conn = null;
+      }
+      
+      // Создаем WebSocket соединение
+      const wsUrl = `wss://socketsbay.com/wss/v2/2/${roomId}/`;
+      websocket = new WebSocket(wsUrl);
+      
+      websocket.onopen = () => {
+        logMessage(gameConnectionStatusEl.parentElement, 'WebSocket соединение установлено (fallback)');
+        connectionEstablished = true;
+        gameConnectionStatusEl.textContent = 'Соединение: WebSocket (резервный)';
+        gameConnectionStatusEl.className = 'connection-status connected';
+        
+        // Отправляем информацию о подключении
+        websocket.send(JSON.stringify({
+          type: 'join',
+          roomId,
+          playerId: playerRole,
+          isHost
+        }));
+      };
+      
+      websocket.onmessage = (event) => {
+        lastActivity = Date.now();
+        try {
+          const data = JSON.parse(event.data);
+          handleNetworkMessage(data);
+        } catch (e) {
+          logMessage(gameConnectionStatusEl.parentElement, `Ошибка обработки WebSocket сообщения: ${e.message}`, true);
+        }
+      };
+      
+      websocket.onclose = () => {
+        logMessage(gameConnectionStatusEl.parentElement, 'WebSocket соединение закрыто, попытка восстановления...', true);
+        gameConnectionStatusEl.textContent = 'Соединение: Восстановление...';
+        gameConnectionStatusEl.className = 'connection-status reconnecting';
+        attemptReconnect();
+      };
+      
+      websocket.onerror = (error) => {
+        logMessage(gameConnectionStatusEl.parentElement, `WebSocket ошибка: ${error.message}`, true);
+      };
+    }
+
+    function attemptReconnect() {
+      if (connectionAttempts >= maxAttempts) {
+        logMessage(gameConnectionStatusEl.parentElement, 'Достигнуто максимальное количество попыток, соединение разорвано', true);
+        cleanupConnections();
+        showScreen('menu');
+        alert('Соединение с соперником потеряно. Попробуйте создать новую игру.');
+        return;
+      }
+      
+      connectionAttempts++;
+      logMessage(gameConnectionStatusEl.parentElement, `Попытка восстановления соединения (${connectionAttempts}/${maxAttempts})...`);
+      
+      gameConnectionStatusEl.textContent = 'Соединение: Восстановление...';
+      gameConnectionStatusEl.className = 'connection-status reconnecting';
+      
+      // Чередуем типы подключения при повторных попытках
+      if (connectionType === 'webrtc') {
+        switchToWebsocketFallback();
+      } else {
+        // Пытаемся вернуться к WebRTC
+        setupWebRTConnection();
+      }
+    }
+
+    function setupWebRTConnection() {
+      if (peer) {
+        try { peer.destroy(); } catch (e) {}
+      }
+      
+      // Генерируем уникальный ID для PeerJS
+      currentPeerId = 'player-' + Math.random().toString(36).substring(2, 12);
+      
+      peer = new Peer(currentPeerId, {
+        host: '0.peerjs.com',
+        port: 443,
+        path: '/',
+        secure: true,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' }
+          ]
+        },
+        debug: 1
+      });
+
+      peer.on('open', (id) => {
+        logMessage(gameConnectionStatusEl.parentElement, `PeerJS ID: ${id}`);
+        connectionAttempts = 0; // Сбрасываем счетчик при успешном открытии
+      });
+
+      peer.on('error', (err) => {
+        logMessage(gameConnectionStatusEl.parentElement, `PeerJS ошибка: ${err.message}`, true);
+        
+        if (err.type === 'unavailable-id' || err.type === 'network') {
+          if (connectionAttempts < maxAttempts) {
+            setTimeout(() => {
+              logMessage(gameConnectionStatusEl.parentElement, 'Повторная попытка WebRTC подключения...');
+              setupWebRTConnection();
+            }, 2000 * connectionAttempts);
+          } else {
+            logMessage(gameConnectionStatusEl.parentElement, 'WebRTC не работает, переключение на WebSocket', true);
+            switchToWebsocketFallback();
+          }
+        }
+      });
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        // При возврате на вкладку проверяем соединение
+        setTimeout(() => {
+          if (connectionEstablished) {
+            checkConnectionHealth();
+          }
+        }, 1000);
+      }
+    }
+
+    function cleanupConnections() {
+      clearInterval(heartbeatInterval);
+      
+      if (conn) {
+        try { conn.close(); } catch (e) {}
+        conn = null;
+      }
+      
+      if (peer) {
+        try { peer.destroy(); } catch (e) {}
+        peer = null;
+      }
+      
+      if (websocket) {
+        try { websocket.close(); } catch (e) {}
+        websocket = null;
+      }
+      
+      clearTimeout(reconnectTimeout);
+      connectionEstablished = false;
+      connectionAttempts = 0;
     }
 
     // =============================
@@ -470,49 +741,22 @@
     }
 
     // =============================
-    // === ВЕБРТК МУЛЬТИПЛЕЕР ===
+    // === СТАБИЛЬНЫЙ МУЛЬТИПЛЕЕР ===
     // =============================
     function generateRoomId() {
       return Math.random().toString(36).substring(2, 10).toUpperCase();
     }
 
-    function setupPeerConnection() {
-      // Генерируем уникальный ID для PeerJS
-      currentPeerId = 'player-' + Math.random().toString(36).substring(2, 12);
-      
-      peer = new Peer(currentPeerId, {
-        host: '0.peerjs.com',
-        port: 443,
-        path: '/',
-        secure: true,
-        config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' }
-          ]
-        }
-      });
-
-      peer.on('open', (id) => {
-        console.log('PeerJS ID:', id);
-      });
-
-      peer.on('error', (err) => {
-        console.error('PeerJS ошибка:', err);
-        if (screens.host.classList.contains('active')) {
-          hostStatusEl.textContent = 'Ошибка подключения';
-          hostStatusEl.className = 'connection-status disconnected';
-        }
-      });
-    }
-
     function createOnlineGame() {
-      if (!peer) setupPeerConnection();
+      cleanupConnections();
+      setupStableConnection();
       
       roomId = generateRoomId();
       isHost = true;
       playerRole = 'player1';
+      connectionType = 'webrtc';
+      connectionAttempts = 0;
+      connectionEstablished = false;
       
       hostCodeEl.textContent = roomId;
       guestCodeEl.value = roomId;
@@ -520,13 +764,16 @@
       // Генерируем QR код
       generateQRCode(roomId);
       
+      // Настраиваем WebRTC соединение
+      setupWebRTConnection();
+      
       // Ждем подключения гостя
       peer.on('connection', (connection) => {
         conn = connection;
         setupConnectionEvents();
         
-        // Отправляем начальное состояние
-        sendGameState();
+        logHost('Гость подключился через WebRTC');
+        connectionEstablished = true;
         
         // Показываем, что гость подключился
         document.querySelector('#host-screen .players-list').innerHTML = `
@@ -534,15 +781,22 @@
           <div>Игрок 2: ✅ Подключен!</div>
         `;
         
+        // Отправляем начальное состояние
         setTimeout(() => {
+          sendGameState();
           startOnlineGame();
         }, 1000);
       });
       
       showScreen('host');
+      logHost(`Создана комната: ${roomId}`);
+      logHost('Ожидание подключения гостя...');
     }
 
     function joinOnlineGame(code) {
+      cleanupConnections();
+      setupStableConnection();
+      
       if (!code || code.length < 4) {
         alert('Введите действительный код комнаты');
         return;
@@ -551,59 +805,139 @@
       roomId = code.toUpperCase();
       isHost = false;
       playerRole = 'player2';
-      
-      if (!peer) setupPeerConnection();
+      connectionType = 'webrtc';
+      connectionAttempts = 0;
+      connectionEstablished = false;
       
       guestCodeEl.value = roomId;
       guestStatusEl.textContent = 'Статус: Поиск хоста...';
       guestStatusEl.className = 'connection-status connecting';
       
       showScreen('guest');
+      logGuest(`Попытка подключения к комнате: ${roomId}`);
+      
+      // Настраиваем WebRTC соединение
+      setupWebRTConnection();
       
       // Пытаемся подключиться к хосту
-      const hostId = 'host-' + roomId;
+      setTimeout(() => {
+        if (!peer || !peer.id) {
+          logGuest('PeerJS не инициализирован, переключение на WebSocket', true);
+          switchToWebsocketFallbackForGuest();
+          return;
+        }
+        
+        const hostId = 'host-' + roomId;
+        
+        try {
+          conn = peer.connect(hostId, {
+            reliable: true,
+            serialization: 'json'
+          });
+          
+          setupConnectionEvents();
+          
+          conn.on('open', () => {
+            logGuest('WebRTC соединение установлено');
+            guestStatusEl.textContent = 'Статус: Подключено! Ожидание игры...';
+            guestStatusEl.className = 'connection-status connected';
+            connectionEstablished = true;
+          });
+          
+          conn.on('error', (err) => {
+            logGuest(`WebRTC ошибка: ${err.message}`, true);
+            if (connectionAttempts < maxAttempts) {
+              setTimeout(() => {
+                logGuest('Повторная попытка WebRTC подключения...');
+                joinOnlineGame(code);
+              }, 3000);
+            } else {
+              logGuest('WebRTC не работает, переключение на WebSocket', true);
+              switchToWebsocketFallbackForGuest();
+            }
+          });
+        } catch (e) {
+          logGuest(`Ошибка создания WebRTC соединения: ${e.message}`, true);
+          switchToWebsocketFallbackForGuest();
+        }
+      }, 2000);
+    }
+
+    function switchToWebsocketFallbackForGuest() {
+      forceWebsocketBtn.classList.remove('hidden');
       
-      // Создаем временное соединение для поиска
-      const tempConn = peer.connect(hostId);
-      tempConn.on('open', () => {
-        tempConn.close();
+      forceWebsocketBtn.onclick = () => {
+        forceWebsocketBtn.classList.add('hidden');
         
-        // Настоящее подключение
-        conn = peer.connect(hostId);
-        setupConnectionEvents();
+        const wsUrl = `wss://socketsbay.com/wss/v2/2/${roomId}/`;
+        websocket = new WebSocket(wsUrl);
         
-        guestStatusEl.textContent = 'Статус: Подключено! Ожидание игры...';
-        guestStatusEl.className = 'connection-status connected';
+        websocket.onopen = () => {
+          logGuest('WebSocket соединение установлено (принудительно)');
+          guestStatusEl.textContent = 'Статус: Подключено через WebSocket';
+          guestStatusEl.className = 'connection-status connected';
+          connectionEstablished = true;
+          connectionType = 'websocket';
+          
+          // Отправляем информацию о подключении
+          websocket.send(JSON.stringify({
+            type: 'join',
+            roomId,
+            playerId: playerRole,
+            isHost: false
+          }));
+        };
         
-        // Ждем начала игры от хоста
-      });
-      
-      tempConn.on('error', (err) => {
-        console.error('Ошибка подключения:', err);
-        guestStatusEl.textContent = 'Статус: Хост не найден';
-        guestStatusEl.className = 'connection-status disconnected';
-      });
+        websocket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            handleNetworkMessage(data);
+          } catch (e) {
+            logGuest(`Ошибка обработки WebSocket сообщения: ${e.message}`, true);
+          }
+        };
+        
+        websocket.onclose = () => {
+          logGuest('WebSocket соединение закрыто', true);
+          guestStatusEl.textContent = 'Статус: Отключено';
+          guestStatusEl.className = 'connection-status disconnected';
+        };
+        
+        websocket.onerror = (error) => {
+          logGuest(`WebSocket ошибка: ${error.message}`, true);
+        };
+      };
     }
 
     function setupConnectionEvents() {
+      if (!conn) return;
+      
       conn.on('open', () => {
-        console.log('Соединение установлено');
+        logMessage(gameConnectionStatusEl.parentElement, 'Соединение установлено');
+        connectionEstablished = true;
+        gameConnectionStatusEl.textContent = 'Соединение: Стабильное';
+        gameConnectionStatusEl.className = 'connection-status connected';
       });
 
       conn.on('data', (data) => {
+        lastActivity = Date.now();
         handleNetworkMessage(data);
       });
 
       conn.on('close', () => {
-        console.log('Соединение закрыто');
+        logMessage(gameConnectionStatusEl.parentElement, 'Соединение закрыто', true);
         if (screens.game.classList.contains('active')) {
-          alert('Соединение с соперником потеряно. Игра прекращена.');
-          showScreen('menu');
+          gameConnectionStatusEl.textContent = 'Соединение: Разорвано';
+          gameConnectionStatusEl.className = 'connection-status disconnected';
+          attemptReconnect();
         }
       });
 
       conn.on('error', (err) => {
-        console.error('Ошибка соединения:', err);
+        logMessage(gameConnectionStatusEl.parentElement, `Ошибка соединения: ${err.message}`, true);
+        if (screens.game.classList.contains('active')) {
+          attemptReconnect();
+        }
       });
     }
 
@@ -622,32 +956,96 @@
         case 'game_start':
           startOnlineGame();
           break;
+          
+        case 'heartbeat':
+          lastActivity = Date.now();
+          // Отправляем подтверждение
+          if (connectionType === 'webrtc' && conn && conn.open) {
+            conn.send({ type: 'heartbeat_ack', timestamp: data.timestamp });
+          }
+          break;
+          
+        case 'heartbeat_ack':
+          lastActivity = Date.now();
+          break;
       }
     }
 
     function sendGameState() {
-      if (!conn || conn.open !== true) return;
-      
-      conn.send({
-        type: 'game_state',
-        state: {
-          currentPlayer,
-          phase,
-          traps: Object.fromEntries(traps),
-          playerPos,
-          trapsPlaced
+      if (connectionType === 'webrtc' && conn && conn.open) {
+        try {
+          conn.send({
+            type: 'game_state',
+            state: {
+              currentPlayer,
+              phase,
+              traps: Object.fromEntries(traps),
+              playerPos,
+              trapsPlaced
+            }
+          });
+          return true;
+        } catch (e) {
+          logMessage(gameConnectionStatusEl.parentElement, `Ошибка отправки через WebRTC: ${e.message}`, true);
+          return false;
         }
-      });
+      } else if (connectionType === 'websocket' && websocket && websocket.readyState === WebSocket.OPEN) {
+        try {
+          websocket.send(JSON.stringify({
+            type: 'game_state',
+            state: {
+              currentPlayer,
+              phase,
+              traps: Object.fromEntries(traps),
+              playerPos,
+              trapsPlaced
+            }
+          }));
+          return true;
+        } catch (e) {
+          logMessage(gameConnectionStatusEl.parentElement, `Ошибка отправки через WebSocket: ${e.message}`, true);
+          return false;
+        }
+      }
+      return false;
     }
 
     function sendGameAction(action, payload) {
-      if (!conn || conn.open !== true) return;
+      lastActivity = Date.now();
       
-      conn.send({
-        type: 'game_action',
-        action,
-        payload
-      });
+      if (connectionType === 'webrtc' && conn && conn.open) {
+        try {
+          conn.send({
+            type: 'game_action',
+            action,
+            payload
+          });
+          return true;
+        } catch (e) {
+          logMessage(gameConnectionStatusEl.parentElement, `Ошибка отправки действия через WebRTC: ${e.message}`, true);
+          // Пытаемся отправить через WebSocket как fallback
+          return sendGameActionFallback(action, payload);
+        }
+      } else {
+        return sendGameActionFallback(action, payload);
+      }
+    }
+
+    function sendGameActionFallback(action, payload) {
+      if (connectionType === 'websocket' && websocket && websocket.readyState === WebSocket.OPEN) {
+        try {
+          websocket.send(JSON.stringify({
+            type: 'game_action',
+            action,
+            payload
+          }));
+          return true;
+        } catch (e) {
+          logMessage(gameConnectionStatusEl.parentElement, `Ошибка отправки через WebSocket: ${e.message}`, true);
+          return false;
+        }
+      }
+      return false;
     }
 
     function syncGameState(state) {
@@ -760,8 +1158,8 @@
         qr.make();
         qrCodeEl.innerHTML = qr.createImgTag(4, 10);
       } catch (e) {
-        console.error('Ошибка генерации QR кода:', e);
-        qrCodeEl.innerHTML = '<div>QR код недоступен</div>';
+        qrCodeEl.innerHTML = `<div style="color:white;padding:10px;">QR код: ${data}</div>`;
+        logHost('QR код не сгенерирован', true);
       }
     }
 
@@ -836,23 +1234,17 @@
     };
     
     document.getElementById('btn-cancel-host').onclick = () => {
-      if (conn) conn.close();
-      if (peer) peer.destroy();
-      peer = null;
+      cleanupConnections();
       showScreen('menu');
     };
     
     document.getElementById('btn-cancel-guest').onclick = () => {
-      if (conn) conn.close();
-      if (peer) peer.destroy();
-      peer = null;
+      cleanupConnections();
       showScreen('menu');
     };
     
     document.getElementById('btn-game-back').onclick = () => {
-      if (conn) conn.close();
-      if (peer) peer.destroy();
-      peer = null;
+      cleanupConnections();
       showScreen('menu');
     };
 
@@ -868,6 +1260,30 @@
           audioCtx.resume();
         }
       }, { once: true });
+      
+      // Загружаем библиотеки для QR кода
+      loadQRScript();
+      loadPeerJSScript();
+    };
+
+    function loadQRScript() {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';
+      script.async = true;
+      script.onload = () => {
+        console.log('QR код библиотека загружена');
+      };
+      document.head.appendChild(script);
+    }
+
+    function loadPeerJSScript() {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js';
+      script.async = true;
+      script.onload = () => {
+        console.log('PeerJS библиотека загружена');
+      };
+      document.head.appendChild(script);
     };
   </script>
 </body>
